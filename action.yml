@@ -1,0 +1,5 @@
+name: Rot Notifier
+description: Tool for notifying about pull request rot
+runs:
+  using: docker
+  image: Dockerfile
