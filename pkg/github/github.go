@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/go-github/v60/github"
 	"golang.org/x/oauth2"
+	"net/http"
 )
 
 type Service struct {
@@ -18,11 +19,14 @@ func (service *Service) prError(message string, number int) error {
 }
 
 func NewService(owner, repository, accessToken string) Service {
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: accessToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
+	var tc *http.Client = nil
+	if accessToken != "" {
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: accessToken},
+		)
+		tc = oauth2.NewClient(ctx, ts)
+	}
 	client := github.NewClient(tc)
 	return Service{
 		Client:     client,
@@ -68,4 +72,12 @@ func (service *Service) ListPullRequestReviewRequests(prNumber int) ([]*github.I
 		}
 	}
 	return requestedReviews, nil
+}
+
+func (service *Service) ListOpenPullRequests() ([]*github.PullRequest, error) {
+	list, _, err := service.Client.PullRequests.List(context.TODO(), service.Owner, service.Repository, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error listing open pull requests in %s/%s", service.Owner, service.Repository)
+	}
+	return list, nil
 }
