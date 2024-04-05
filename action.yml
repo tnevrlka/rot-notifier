@@ -3,3 +3,6 @@ description: Tool for notifying about pull request rot
 runs:
   using: docker
   image: Dockerfile
+outputs:
+  gh-to-slack-json:
+    description: JSON file containing Slack IDs for GitHub usernames encoded in Base64
