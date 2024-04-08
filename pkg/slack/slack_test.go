@@ -38,6 +38,57 @@ func NewMockService(base64String string) (*Service, error) {
 	return service, err
 }
 
+func TestNewService(t *testing.T) {
+	testCases := []struct {
+		name           string
+		token          string
+		usernameBase64 string
+		expected       *Service
+		valid          bool
+	}{
+		{
+			name:           "valid",
+			usernameBase64: base64File,
+			expected: &Service{
+				Users: sampleUsers,
+			},
+			valid: true,
+		},
+		{
+			name:           "invalid",
+			usernameBase64: base64File + "foo",
+			expected:       nil,
+			valid:          false,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			service, err := NewService("", testCase.usernameBase64)
+			if !testCase.valid && err == nil {
+				t.Errorf("expected err to occurr, was: %v", err)
+			}
+			if testCase.valid {
+				if err != nil {
+					t.Errorf("expected err to not occurr: %v", err)
+				}
+				// Check that users are the same
+				for _, expUser := range testCase.expected.Users {
+					found := false
+					for _, user := range service.Users {
+						if user.GitHubUsername == expUser.GitHubUsername && user.SlackId == expUser.SlackId {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("could not find expected user '%v' in actual users '%v'", expUser, service.Users)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestUsersFromBase64JSON(t *testing.T) {
 	testCases := []struct {
 		name     string
