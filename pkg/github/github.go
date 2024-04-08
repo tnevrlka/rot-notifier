@@ -14,8 +14,23 @@ type Service struct {
 	Repository string
 }
 
-func (service *Service) prError(message string, number int) error {
-	return fmt.Errorf("%s in %s/%s, number %d", message, service.Owner, service.Repository, number)
+type RepositoryError struct {
+	Service
+	Message string
+}
+
+type PullRequestError struct {
+	Service
+	Message string
+	Number  int
+}
+
+func (r *RepositoryError) Error() string {
+	return fmt.Sprintf("%s in %s/%s", r.Message, r.Owner, r.Repository)
+}
+
+func (p *PullRequestError) Error() string {
+	return fmt.Sprintf("%s in %s/%s, number %d", p.Message, p.Owner, p.Repository, p.Number)
 }
 
 func NewService(owner, repository, accessToken string) Service {
@@ -38,7 +53,11 @@ func NewService(owner, repository, accessToken string) Service {
 func (service *Service) ListIssueComments(prNumber int) ([]*github.IssueComment, error) {
 	comments, _, err := service.Client.Issues.ListComments(context.TODO(), service.Owner, service.Repository, prNumber, nil)
 	if err != nil {
-		return nil, service.prError("error listing issue comments", prNumber)
+		return nil, &PullRequestError{
+			Service: *service,
+			Message: "error listing issue comments",
+			Number:  prNumber,
+		}
 	}
 	return comments, nil
 }
@@ -46,7 +65,11 @@ func (service *Service) ListIssueComments(prNumber int) ([]*github.IssueComment,
 func (service *Service) ListPullRequestReviews(prNumber int) ([]*github.PullRequestReview, error) {
 	reviews, _, err := service.Client.PullRequests.ListReviews(context.TODO(), service.Owner, service.Repository, prNumber, nil)
 	if err != nil {
-		return nil, service.prError("error listing pull request reviews", prNumber)
+		return nil, &PullRequestError{
+			Service: *service,
+			Message: "error listing pull request reviews",
+			Number:  prNumber,
+		}
 	}
 	return reviews, nil
 }
@@ -54,7 +77,11 @@ func (service *Service) ListPullRequestReviews(prNumber int) ([]*github.PullRequ
 func (service *Service) ListPullRequestEvents(prNumber int) ([]*github.IssueEvent, error) {
 	events, _, err := service.Client.Issues.ListIssueEvents(context.TODO(), service.Owner, service.Repository, prNumber, nil)
 	if err != nil {
-		return nil, service.prError("error listing pull request events", prNumber)
+		return nil, &PullRequestError{
+			Service: *service,
+			Message: "error listing pull request events",
+			Number:  prNumber,
+		}
 	}
 	return events, nil
 }
@@ -77,7 +104,10 @@ func (service *Service) ListPullRequestReviewRequests(prNumber int) ([]*github.I
 func (service *Service) ListOpenPullRequests() ([]*github.PullRequest, error) {
 	list, _, err := service.Client.PullRequests.List(context.TODO(), service.Owner, service.Repository, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error listing open pull requests in %s/%s", service.Owner, service.Repository)
+		return nil, &RepositoryError{
+			Service: *service,
+			Message: "error listing open pull requests",
+		}
 	}
 	return list, nil
 }
