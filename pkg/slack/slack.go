@@ -12,20 +12,24 @@ type User struct {
 	SlackId        string `json:"id"`
 }
 
+type ClientInterface interface {
+	PostMessage(channelID string, options ...slack.MsgOption) (string, string, error)
+}
+
 type Service struct {
-	Client *slack.Client
+	Client ClientInterface
 	Users  []User
 }
 
 func usersFromBase64JSON(encoded string) ([]User, error) {
 	jsonFile, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return nil, fmt.Errorf("could not decode base64: %+v", err)
+		return nil, fmt.Errorf("could not decode base64: %w", err)
 	}
 	var users []User
 	err = json.Unmarshal(jsonFile, &users)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal json: %+v", err)
+		return nil, fmt.Errorf("could not unmarshal json: %w", err)
 	}
 	return users, nil
 }
@@ -58,7 +62,7 @@ func (service *Service) SendMessage(username string, options ...slack.MsgOption)
 	}
 	_, _, err := service.Client.PostMessage(channelId, options...)
 	if err != nil {
-		return fmt.Errorf("could not post message: %+v", err)
+		return fmt.Errorf("could not post message: %w", err)
 	}
 	return nil
 }

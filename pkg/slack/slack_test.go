@@ -2,19 +2,12 @@ package slack
 
 import (
 	"encoding/base64"
+	"errors"
+	"github.com/slack-go/slack"
+	"github.com/stretchr/testify/mock"
 	"reflect"
 	"testing"
 )
-
-// Base64 encoded sample valid JSON
-// `[
-//
-//	{"username": "foo", "id": "U123"},
-//	{"username": "spam", "id": "UUUU"},
-//	{"username": "user", "id": "UKYR"}
-//
-// ]`)
-const base64File = "WyAKCXsidXNlcm5hbWUiOiAiZm9vIiwgImlkIjogIlUxMjMifSwKCXsidXNlcm5hbWUiOiAic3BhbSIsICJpZCI6ICJVVVVVIn0sCgl7InVzZXJuYW1lIjogInVzZXIiLCAiaWQiOiAiVUtZUiJ9Cl0K"
 
 var sampleUsers = []User{
 	{
@@ -31,11 +24,16 @@ var sampleUsers = []User{
 	},
 }
 
-func NewMockService(base64String string) (*Service, error) {
-	service := new(Service)
-	var err error
-	service.Users, err = usersFromBase64JSON(base64String)
-	return service, err
+// Base64 encoded sampleUsers as JSON
+const base64File = "WyAKCXsidXNlcm5hbWUiOiAiZm9vIiwgImlkIjogIlUxMjMifSwKCXsidXNlcm5hbWUiOiAic3BhbSIsICJpZCI6ICJVVVVVIn0sCgl7InVzZXJuYW1lIjogInVzZXIiLCAiaWQiOiAiVUtZUiJ9Cl0K"
+
+type MockClient struct {
+	mock.Mock
+}
+
+func (m *MockClient) PostMessage(channelID string, options ...slack.MsgOption) (string, string, error) {
+	args := m.Called(channelID, options)
+	return args.String(0), args.String(1), args.Error(2)
 }
 
 func TestNewService(t *testing.T) {
@@ -134,10 +132,8 @@ func TestUsersFromBase64JSON(t *testing.T) {
 }
 
 func TestSlackIdFromGitHubUsername(t *testing.T) {
-	mockService, err := NewMockService(base64File)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mockService := Service{Users: sampleUsers}
+
 	testCases := []struct {
 		name     string
 		input    string
@@ -160,6 +156,73 @@ func TestSlackIdFromGitHubUsername(t *testing.T) {
 			if slackId != testCase.expected {
 				t.Errorf("expected slackId of '%s' to be '%s', got '%s'", testCase.input, testCase.expected, slackId)
 			}
+		})
+	}
+}
+
+func TestSendMessage(t *testing.T) {
+	mockService := Service{Users: sampleUsers}
+
+	testCases := []struct {
+		name        string
+		username    string
+		channelId   string
+		options     []slack.MsgOption
+		expected    error
+		postError   error
+		reachesPost bool
+	}{
+		{
+			name:      "valid",
+			username:  mockService.Users[0].GitHubUsername,
+			channelId: mockService.Users[0].SlackId,
+			options: []slack.MsgOption{
+				slack.MsgOptionText("foo", false),
+				slack.MsgOptionAsUser(true),
+			},
+			expected:    nil,
+			postError:   nil,
+			reachesPost: true,
+		},
+		{
+			name:      "invalid username",
+			username:  "ferda",
+			channelId: "",
+			options: []slack.MsgOption{
+				slack.MsgOptionText("foo", false),
+				slack.MsgOptionAsUser(true),
+			},
+			expected:    errors.New("user with username 'ferda' was not found"),
+			postError:   nil,
+			reachesPost: false,
+		},
+		{
+			name:      "post error",
+			username:  mockService.Users[0].GitHubUsername,
+			channelId: mockService.Users[0].SlackId,
+			options: []slack.MsgOption{
+				slack.MsgOptionText("foo", false),
+				slack.MsgOptionAsUser(true),
+			},
+			expected:    errors.New("could not post message: test post error"),
+			postError:   errors.New("test post error"),
+			reachesPost: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := MockClient{}
+			service := Service{Users: mockService.Users, Client: &mockClient}
+
+			if testCase.reachesPost {
+				mockClient.On("PostMessage", testCase.channelId, testCase.options).Return("", "", testCase.postError)
+			}
+			err := service.SendMessage(testCase.username, testCase.options...)
+			if err != nil && testCase.expected != nil && err.Error() != testCase.expected.Error() {
+				t.Errorf("errors do not match, got '%v', expected '%v'", err, testCase.expected)
+			}
+			mockClient.AssertExpectations(t)
 		})
 	}
 }
