@@ -46,7 +46,7 @@ func NewService(token, usernameBase64 string) (*Service, error) {
 	}, nil
 }
 
-func (service *Service) SlackIdFromGitHubUsername(username string) string {
+func (service *Service) MsgIdFromGitUsername(username string) string {
 	for _, user := range service.Users {
 		if user.GitHubUsername == username {
 			return user.SlackId
@@ -55,12 +55,12 @@ func (service *Service) SlackIdFromGitHubUsername(username string) string {
 	return ""
 }
 
-func (service *Service) SendMessage(username string, options ...slack.MsgOption) error {
-	channelId := service.SlackIdFromGitHubUsername(username)
+func (service *Service) SendMessage(username, message string) error {
+	channelId := service.MsgIdFromGitUsername(username)
 	if channelId == "" {
 		return fmt.Errorf("user with username '%s' was not found", username)
 	}
-	_, _, err := service.Client.PostMessage(channelId, options...)
+	_, _, err := service.Client.PostMessage(channelId, slack.MsgOptionText(message, false), slack.MsgOptionAsUser(true))
 	if err != nil {
 		return fmt.Errorf("could not post message: %w", err)
 	}

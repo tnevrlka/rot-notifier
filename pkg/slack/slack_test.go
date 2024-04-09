@@ -152,7 +152,7 @@ func TestSlackIdFromGitHubUsername(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			slackId := mockService.SlackIdFromGitHubUsername(testCase.input)
+			slackId := mockService.MsgIdFromGitUsername(testCase.input)
 			if slackId != testCase.expected {
 				t.Errorf("expected slackId of '%s' to be '%s', got '%s'", testCase.input, testCase.expected, slackId)
 			}
@@ -216,9 +216,9 @@ func TestSendMessage(t *testing.T) {
 			service := Service{Users: mockService.Users, Client: &mockClient}
 
 			if testCase.reachesPost {
-				mockClient.On("PostMessage", testCase.channelId, testCase.options).Return("", "", testCase.postError)
+				mockClient.On("PostMessage", testCase.channelId, mock.Anything).Return("", "", testCase.postError)
 			}
-			err := service.SendMessage(testCase.username, testCase.options...)
+			err := service.SendMessage(testCase.username, "foo")
 			if err != nil && testCase.expected != nil && err.Error() != testCase.expected.Error() {
 				t.Errorf("errors do not match, got '%v', expected '%v'", err, testCase.expected)
 			}
