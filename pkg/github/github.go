@@ -3,37 +3,51 @@ package github
 import (
 	"context"
 	"fmt"
+	"net/http"
+
 	"github.com/google/go-github/v60/github"
 	"golang.org/x/oauth2"
-	"net/http"
 )
 
+type IssueInterface interface {
+	ListComments(ctx context.Context, owner, repo string, number int, opts *github.IssueListCommentsOptions) ([]*github.IssueComment, *github.Response, error)
+	ListIssueEvents(ctx context.Context, owner, repo string, number int, opts *github.ListOptions) ([]*github.IssueEvent, *github.Response, error)
+}
+
+type PullRequestInterface interface {
+	ListReviews(ctx context.Context, owner, repo string, number int, opts *github.ListOptions) ([]*github.PullRequestReview, *github.Response, error)
+	List(ctx context.Context, owner, repo string, opts *github.PullRequestListOptions) ([]*github.PullRequest, *github.Response, error)
+}
+
 type Service struct {
-	Client     *github.Client
-	Owner      string
-	Repository string
+	Issues       IssueInterface
+	PullRequests PullRequestInterface
+	Owner        string
+	Repository   string
 }
 
 type RepositoryError struct {
-	Service
-	Message string
+	*Service
+	Message      string
+	WrappedError error
 }
 
 type PullRequestError struct {
-	Service
-	Message string
-	Number  int
+	*Service
+	Message      string
+	Number       int
+	WrappedError error
 }
 
 func (r *RepositoryError) Error() string {
-	return fmt.Sprintf("%s in %s/%s", r.Message, r.Owner, r.Repository)
+	return fmt.Sprintf("%s in %s/%s: %+v", r.Message, r.Owner, r.Repository, r.WrappedError)
 }
 
 func (p *PullRequestError) Error() string {
-	return fmt.Sprintf("%s in %s/%s, number %d", p.Message, p.Owner, p.Repository, p.Number)
+	return fmt.Sprintf("%s in %s/%s, number %d: %+v", p.Message, p.Owner, p.Repository, p.Number, p.WrappedError)
 }
 
-func NewService(owner, repository, accessToken string) Service {
+func NewService(owner, repository, accessToken string) *Service {
 	var tc *http.Client = nil
 	if accessToken != "" {
 		ctx := context.Background()
@@ -43,44 +57,48 @@ func NewService(owner, repository, accessToken string) Service {
 		tc = oauth2.NewClient(ctx, ts)
 	}
 	client := github.NewClient(tc)
-	return Service{
-		Client:     client,
-		Owner:      owner,
-		Repository: repository,
+	return &Service{
+		PullRequests: client.PullRequests,
+		Issues:       client.Issues,
+		Owner:        owner,
+		Repository:   repository,
 	}
 }
 
 func (service *Service) ListIssueComments(prNumber int) ([]*github.IssueComment, error) {
-	comments, _, err := service.Client.Issues.ListComments(context.TODO(), service.Owner, service.Repository, prNumber, nil)
+	comments, _, err := service.Issues.ListComments(context.TODO(), service.Owner, service.Repository, prNumber, nil)
 	if err != nil {
 		return nil, &PullRequestError{
-			Service: *service,
-			Message: "error listing issue comments",
-			Number:  prNumber,
+			Service:      service,
+			Message:      "error listing issue comments",
+			Number:       prNumber,
+			WrappedError: err,
 		}
 	}
 	return comments, nil
 }
 
 func (service *Service) ListPullRequestReviews(prNumber int) ([]*github.PullRequestReview, error) {
-	reviews, _, err := service.Client.PullRequests.ListReviews(context.TODO(), service.Owner, service.Repository, prNumber, nil)
+	reviews, _, err := service.PullRequests.ListReviews(context.TODO(), service.Owner, service.Repository, prNumber, nil)
 	if err != nil {
 		return nil, &PullRequestError{
-			Service: *service,
-			Message: "error listing pull request reviews",
-			Number:  prNumber,
+			Service:      service,
+			Message:      "error listing pull request reviews",
+			Number:       prNumber,
+			WrappedError: err,
 		}
 	}
 	return reviews, nil
 }
 
 func (service *Service) ListPullRequestEvents(prNumber int) ([]*github.IssueEvent, error) {
-	events, _, err := service.Client.Issues.ListIssueEvents(context.TODO(), service.Owner, service.Repository, prNumber, nil)
+	events, _, err := service.Issues.ListIssueEvents(context.TODO(), service.Owner, service.Repository, prNumber, nil)
 	if err != nil {
 		return nil, &PullRequestError{
-			Service: *service,
-			Message: "error listing pull request events",
-			Number:  prNumber,
+			Service:      service,
+			Message:      "error listing pull request events",
+			Number:       prNumber,
+			WrappedError: err,
 		}
 	}
 	return events, nil
@@ -102,11 +120,12 @@ func (service *Service) ListPullRequestReviewRequests(prNumber int) ([]*github.I
 }
 
 func (service *Service) ListOpenPullRequests() ([]*github.PullRequest, error) {
-	list, _, err := service.Client.PullRequests.List(context.TODO(), service.Owner, service.Repository, nil)
+	list, _, err := service.PullRequests.List(context.TODO(), service.Owner, service.Repository, nil)
 	if err != nil {
 		return nil, &RepositoryError{
-			Service: *service,
-			Message: "error listing open pull requests",
+			Service:      service,
+			Message:      "error listing open pull requests",
+			WrappedError: err,
 		}
 	}
 	return list, nil
