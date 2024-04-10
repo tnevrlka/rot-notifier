@@ -2,6 +2,7 @@ package slack
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"github.com/slack-go/slack"
 	"github.com/stretchr/testify/mock"
@@ -24,8 +25,8 @@ var sampleUsers = []User{
 	},
 }
 
-// Base64 encoded sampleUsers as JSON
-const base64File = "WyAKCXsidXNlcm5hbWUiOiAiZm9vIiwgImlkIjogIlUxMjMifSwKCXsidXNlcm5hbWUiOiAic3BhbSIsICJpZCI6ICJVVVVVIn0sCgl7InVzZXJuYW1lIjogInVzZXIiLCAiaWQiOiAiVUtZUiJ9Cl0K"
+var jsonBytes, _ = json.Marshal(sampleUsers)
+var base64File = base64.StdEncoding.EncodeToString(jsonBytes)
 
 type MockClient struct {
 	mock.Mock
